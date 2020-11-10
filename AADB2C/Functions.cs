@@ -6,10 +6,10 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Logging;
 using Microsoft.Graph;
 using Microsoft.Identity.Client;
-using Microsoft.Extensions.Caching.Memory;
 using System.Net.Http.Headers;
 using Newtonsoft.Json;
 using System.Net;
+using System.Linq;
 
 namespace AADB2C
 {
@@ -17,13 +17,13 @@ namespace AADB2C
     {
         private readonly IConfidentialClientApplication confidentialClientApplication;
         private readonly IGraphServiceClient graphServiceClient;
-        private readonly IMemoryCache memoryCache;
+        private readonly ExtensionService extensionService;
 
-        public Functions(IConfidentialClientApplication confidentialClientApplication, IGraphServiceClient graphServiceClient, IMemoryCache memoryCache)
+        public Functions(IConfidentialClientApplication confidentialClientApplication, IGraphServiceClient graphServiceClient, ExtensionService extensionService)
         {
             this.confidentialClientApplication = confidentialClientApplication;
             this.graphServiceClient = graphServiceClient;
-            this.memoryCache = memoryCache;
+            this.extensionService = extensionService;
         }
 
         [FunctionName(nameof(B2C))]
@@ -41,21 +41,23 @@ namespace AADB2C
             ILogger log)
         {
             var code = req.Query["code"];
-            var token = await confidentialClientApplication.AcquireTokenByAuthorizationCode(null, code).ExecuteAsync();
-            var cacheKey = token.Account.HomeAccountId.Identifier;
-            if (!memoryCache.TryGetValue<IGraphServiceClient>(cacheKey, out var userGraphServiceClient))
+            var delegateAuthenticationProvider = new DelegateAuthenticationProvider(async request =>
             {
-                var delegateAuthenticationProvider = new DelegateAuthenticationProvider(request =>
-                {
-                    request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token.AccessToken);
-                    return Task.CompletedTask;
-                });
-                userGraphServiceClient = new GraphServiceClient(delegateAuthenticationProvider);
-                var cacheEntry = memoryCache.CreateEntry(cacheKey);
-                cacheEntry.SetValue(userGraphServiceClient).SetAbsoluteExpiration(token.ExpiresOn);
-            }
-            var me = userGraphServiceClient.Me;
-            return new OkResult();
+                var token = await confidentialClientApplication.AcquireTokenByAuthorizationCode(Enumerable.Empty<string>(), code).ExecuteAsync();
+                request.Headers.Authorization = AuthenticationHeaderValue.Parse(token.CreateAuthorizationHeader());
+            });
+            var userGraphServiceClient = new GraphServiceClient(delegateAuthenticationProvider);
+            var me = await userGraphServiceClient.Me.Request().GetAsync();
+            return new OkObjectResult(me);
+        }
+
+        [FunctionName(nameof(Users))]
+        public async Task<IActionResult> Users(
+            [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "users")] HttpRequest req,
+            ILogger log)
+        {
+            var users = await graphServiceClient.Users.Request().GetAsync();
+            return new OkObjectResult(users);
         }
 
         [FunctionName(nameof(CreateUser))]
@@ -65,19 +67,42 @@ namespace AADB2C
         {
             var payload = await req.ReadAsStringAsync();
             var user = JsonConvert.DeserializeObject<User>(payload);
+            user.AdditionalData = extensionService.TransformUserData(user.AdditionalData);
             await graphServiceClient.Users.Request().AddAsync(user);
             return new StatusCodeResult((int)HttpStatusCode.Created);
         }
 
+        [FunctionName(nameof(GetUser))]
+        public async Task<IActionResult> GetUser(
+            [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "users/{userPrincipalName}")] HttpRequest req,
+            string userPrincipalName,
+            ILogger log)
+        {
+            var user = await graphServiceClient.Users[userPrincipalName].Request().Expand("extensions").GetAsync();
+            return new OkObjectResult(user);
+        }
+
         [FunctionName(nameof(UpdateUser))]
         public async Task<IActionResult> UpdateUser(
-            [HttpTrigger(AuthorizationLevel.Anonymous, "put", Route = "users")] HttpRequest req,
+            [HttpTrigger(AuthorizationLevel.Anonymous, "put", Route = "users/{userPrincipalName}")] HttpRequest req,
+            string userPrincipalName,
             ILogger log)
         {
             var payload = await req.ReadAsStringAsync();
             var user = JsonConvert.DeserializeObject<User>(payload);
-            await graphServiceClient.Users[user.UserPrincipalName].Request().UpdateAsync(user);
-            return new StatusCodeResult((int)HttpStatusCode.OK);
+            user.AdditionalData = extensionService.TransformUserData(user.AdditionalData);
+            await graphServiceClient.Users[userPrincipalName].Request().UpdateAsync(user);
+            return new StatusCodeResult((int)HttpStatusCode.NoContent);
+        }
+
+        [FunctionName(nameof(DeleteUser))]
+        public async Task<IActionResult> DeleteUser(
+            [HttpTrigger(AuthorizationLevel.Anonymous, "delete", Route = "users/{userPrincipalName}")] HttpRequest req,
+            string userPrincipalName,
+            ILogger log)
+        {
+            await graphServiceClient.Users[userPrincipalName].Request().DeleteAsync();
+            return new StatusCodeResult((int)HttpStatusCode.NoContent);
         }
     }
 }

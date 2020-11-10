@@ -14,7 +14,7 @@ namespace AADB2C
     {
         public override void Configure(IFunctionsHostBuilder builder)
         {
-            builder.Services.AddMemoryCache();
+            builder.Services.AddSingleton<ExtensionService>();
 
             builder.Services.AddSingleton(provider =>
             {
@@ -46,7 +46,7 @@ namespace AADB2C
                 var delegateAuthenticationProvider = new DelegateAuthenticationProvider(async request =>
                 {
                     var token = await confidentialClientApplication.AcquireTokenForClient(new[] { "https://graph.microsoft.com/.default" }).ExecuteAsync();
-                    request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token.AccessToken);
+                    request.Headers.Authorization = AuthenticationHeaderValue.Parse(token.CreateAuthorizationHeader());
                 });
                 return new GraphServiceClient(delegateAuthenticationProvider);
             });
