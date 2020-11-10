@@ -16,5 +16,7 @@ namespace AADB2C
 
         public IDictionary<string, object>? TransformUserData(IDictionary<string, object> userData) => 
             userData?.ToDictionary(extension => $"{extensionPrefix}{extension.Key}", extension => extension.Value);
+
+        public string GetExtensionByName(string extensionName) => $"{extensionPrefix}{extensionName}";
     }
 }

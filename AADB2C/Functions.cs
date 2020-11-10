@@ -9,7 +9,6 @@ using Microsoft.Identity.Client;
 using System.Net.Http.Headers;
 using Newtonsoft.Json;
 using System.Net;
-using System.Linq;
 
 namespace AADB2C
 {
@@ -18,12 +17,17 @@ namespace AADB2C
         private readonly IConfidentialClientApplication confidentialClientApplication;
         private readonly IGraphServiceClient graphServiceClient;
         private readonly ExtensionService extensionService;
+        private readonly string[] authorizationScopes = new[] { "openid" };
+        private readonly string userProperties;
+
+        private const string CustomerClaim = "Customer";
 
         public Functions(IConfidentialClientApplication confidentialClientApplication, IGraphServiceClient graphServiceClient, ExtensionService extensionService)
         {
             this.confidentialClientApplication = confidentialClientApplication;
             this.graphServiceClient = graphServiceClient;
             this.extensionService = extensionService;
+            userProperties = $"id,displayName,identities,{extensionService.GetExtensionByName(CustomerClaim)}";
         }
 
         [FunctionName(nameof(B2C))]
@@ -31,7 +35,7 @@ namespace AADB2C
             [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = null)] HttpRequest req,
             ILogger log)
         {
-            var uri = await confidentialClientApplication.GetAuthorizationRequestUrl(null).ExecuteAsync();
+            var uri = await confidentialClientApplication.GetAuthorizationRequestUrl(authorizationScopes).ExecuteAsync();
             return new RedirectResult(uri.AbsoluteUri);
         }
 
@@ -43,7 +47,7 @@ namespace AADB2C
             var code = req.Query["code"];
             var delegateAuthenticationProvider = new DelegateAuthenticationProvider(async request =>
             {
-                var token = await confidentialClientApplication.AcquireTokenByAuthorizationCode(Enumerable.Empty<string>(), code).ExecuteAsync();
+                var token = await confidentialClientApplication.AcquireTokenByAuthorizationCode(authorizationScopes, code).ExecuteAsync();
                 request.Headers.Authorization = AuthenticationHeaderValue.Parse(token.CreateAuthorizationHeader());
             });
             var userGraphServiceClient = new GraphServiceClient(delegateAuthenticationProvider);
@@ -56,7 +60,7 @@ namespace AADB2C
             [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "users")] HttpRequest req,
             ILogger log)
         {
-            var users = await graphServiceClient.Users.Request().GetAsync();
+            var users = await graphServiceClient.Users.Request().Select(userProperties).GetAsync();
             return new OkObjectResult(users);
         }
 
@@ -78,7 +82,8 @@ namespace AADB2C
             string userPrincipalName,
             ILogger log)
         {
-            var user = await graphServiceClient.Users[userPrincipalName].Request().Expand("extensions").GetAsync();
+            var user = await graphServiceClient.Users[userPrincipalName].Request().Select(userProperties).GetAsync();
+            log.LogInformation("Customer: {Customer}", user.AdditionalData[extensionService.GetExtensionByName(CustomerClaim)]);
             return new OkObjectResult(user);
         }
 
