@@ -1,0 +1,9 @@
+{
+  "profiles": {
+    "AADB2C": {
+      "commandName": "Project",
+      "launchBrowser": true,
+      "launchUrl": "http://localhost:7071/b2c"
+    }
+  }
+}

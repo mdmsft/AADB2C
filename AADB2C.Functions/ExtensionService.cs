@@ -2,7 +2,7 @@
 using System.Collections.Generic;
 using System.Linq;
 
-namespace AADB2C
+namespace AADB2C.Functions
 {
     public class ExtensionService
     {
@@ -10,13 +10,14 @@ namespace AADB2C
 
         public ExtensionService(IConfiguration configuration)
         {
-            var extensionsAppId = configuration.GetValue<string>("AAD_B2C_EXTENSIONS_APP_ID").Replace("-", string.Empty);
+            var extensionsAppId = configuration.GetValue<string>("B2C_EXTENSIONS_CLIENT_ID").Replace("-", string.Empty);
             extensionPrefix = $"extension_{extensionsAppId}_";
         }
 
         public IDictionary<string, object>? TransformUserData(IDictionary<string, object> userData) => 
             userData?.ToDictionary(extension => $"{extensionPrefix}{extension.Key}", extension => extension.Value);
 
-        public string GetExtensionByName(string extensionName) => $"{extensionPrefix}{extensionName}";
+        public string GetExtensionByName(string extensionName) =>
+            $"{extensionPrefix}{extensionName}";
     }
 }

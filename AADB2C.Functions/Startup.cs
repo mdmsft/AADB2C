@@ -6,27 +6,30 @@ using Microsoft.Identity.Client;
 using System;
 using System.Net.Http.Headers;
 
-[assembly: FunctionsStartup(typeof(AADB2C.Startup))]
+[assembly: FunctionsStartup(typeof(AADB2C.Functions.Startup))]
 
-namespace AADB2C
+namespace AADB2C.Functions
 {
     public class Startup : FunctionsStartup
     {
         public override void Configure(IFunctionsHostBuilder builder)
         {
             builder.Services.AddSingleton<ExtensionService>();
+            builder.Services.AddSingleton<AuthorizationService>();
+
+            builder.Services.AddHttpClient("web", client => client.BaseAddress = new Uri("https://localhost:5001"));
 
             builder.Services.AddSingleton(provider =>
             {
                 var configuration = provider.GetRequiredService<IConfiguration>();
 
-                var tenantId = configuration.GetValue<string>("AAD_TENANT_ID");
-                var clientId = configuration.GetValue<string>("AAD_CLIENT_ID");
-                var clientSecret = configuration.GetValue<string>("AAD_CLIENT_SECRET");
-                var redirectUri = configuration.GetValue<Uri>("AAD_REDIRECT_URI");
+                var tenantId = configuration.GetValue<string>("AAD_B2C_TENANT_ID");
+                var clientId = configuration.GetValue<string>("B2C_CLIENT_ID");
+                var clientSecret = configuration.GetValue<string>("B2C_CLIENT_SECRET");
+                var redirectUri = configuration.GetValue<Uri>("B2C_REDIRECT_URI");
 
-                var tenant = configuration.GetValue<string>("AAD_B2C_TENANT");
-                var policy = configuration.GetValue<string>("AAD_B2C_POLICY");
+                var tenant = configuration.GetValue<string>("B2C_TENANT_NAME");
+                var policy = configuration.GetValue<string>("B2C_POLICY_NAME");
                 
                 var authority = $"https://{tenant}.b2clogin.com/tfp/{tenant}.onmicrosoft.com/{policy}";
 
@@ -38,7 +41,7 @@ namespace AADB2C
             {
                 var configuration = provider.GetRequiredService<IConfiguration>();
 
-                var tenantId = configuration.GetValue<string>("AAD_TENANT_ID");
+                var tenantId = configuration.GetValue<string>("AAD_B2C_TENANT_ID");
                 var clientId = configuration.GetValue<string>("AAD_CLIENT_ID");
                 var clientSecret = configuration.GetValue<string>("AAD_CLIENT_SECRET");
 

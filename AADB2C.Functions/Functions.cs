@@ -9,25 +9,29 @@ using Microsoft.Identity.Client;
 using System.Net.Http.Headers;
 using Newtonsoft.Json;
 using System.Net;
+using System.Net.Http;
 
-namespace AADB2C
+namespace AADB2C.Functions
 {
     public class Functions
     {
         private readonly IConfidentialClientApplication confidentialClientApplication;
         private readonly IGraphServiceClient graphServiceClient;
         private readonly ExtensionService extensionService;
-        private readonly string[] authorizationScopes = new[] { "openid" };
+        private readonly AuthorizationService authorizationService;
+        private readonly IHttpClientFactory clientFactory;
         private readonly string userProperties;
 
         private const string CustomerClaim = "Customer";
 
-        public Functions(IConfidentialClientApplication confidentialClientApplication, IGraphServiceClient graphServiceClient, ExtensionService extensionService)
+        public Functions(IConfidentialClientApplication confidentialClientApplication, IGraphServiceClient graphServiceClient, ExtensionService extensionService, AuthorizationService authorizationService, IHttpClientFactory clientFactory)
         {
             this.confidentialClientApplication = confidentialClientApplication;
             this.graphServiceClient = graphServiceClient;
             this.extensionService = extensionService;
-            userProperties = $"id,displayName,identities,{extensionService.GetExtensionByName(CustomerClaim)}";
+            this.authorizationService = authorizationService;
+            this.clientFactory = clientFactory;
+            userProperties = $"{nameof(User.Id)}, {nameof(User.DisplayName)}, {nameof(User.GivenName)}, {nameof(User.Surname)}, {nameof(User.Identities)}, {extensionService.GetExtensionByName(CustomerClaim)}";
         }
 
         [FunctionName(nameof(B2C))]
@@ -35,7 +39,7 @@ namespace AADB2C
             [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = null)] HttpRequest req,
             ILogger log)
         {
-            var uri = await confidentialClientApplication.GetAuthorizationRequestUrl(authorizationScopes).ExecuteAsync();
+            var uri = await confidentialClientApplication.GetAuthorizationRequestUrl(authorizationService.AuthorizationScopes).ExecuteAsync();
             return new RedirectResult(uri.AbsoluteUri);
         }
 
@@ -45,14 +49,12 @@ namespace AADB2C
             ILogger log)
         {
             var code = req.Query["code"];
-            var delegateAuthenticationProvider = new DelegateAuthenticationProvider(async request =>
-            {
-                var token = await confidentialClientApplication.AcquireTokenByAuthorizationCode(authorizationScopes, code).ExecuteAsync();
-                request.Headers.Authorization = AuthenticationHeaderValue.Parse(token.CreateAuthorizationHeader());
-            });
-            var userGraphServiceClient = new GraphServiceClient(delegateAuthenticationProvider);
-            var me = await userGraphServiceClient.Me.Request().GetAsync();
-            return new OkObjectResult(me);
+            var token = await confidentialClientApplication.AcquireTokenByAuthorizationCode(authorizationService.AuthorizationScopes, code).ExecuteAsync();
+            using var httpClient = clientFactory.CreateClient("web");
+            httpClient.DefaultRequestHeaders.Authorization = AuthenticationHeaderValue.Parse(token.CreateAuthorizationHeader());
+            var response = await httpClient.GetAsync("/");
+            response.EnsureSuccessStatusCode();
+            return new OkObjectResult(await response.Content.ReadAsStringAsync());
         }
 
         [FunctionName(nameof(Users))]
