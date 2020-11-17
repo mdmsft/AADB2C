@@ -19,18 +19,18 @@ namespace AADB2C.Functions
         private readonly IGraphServiceClient graphServiceClient;
         private readonly ExtensionService extensionService;
         private readonly AuthorizationService authorizationService;
-        private readonly IHttpClientFactory clientFactory;
+        private readonly IApiService apiService;
         private readonly string userProperties;
 
         private const string CustomerClaim = "Customer";
 
-        public Functions(IConfidentialClientApplication confidentialClientApplication, IGraphServiceClient graphServiceClient, ExtensionService extensionService, AuthorizationService authorizationService, IHttpClientFactory clientFactory)
+        public Functions(IConfidentialClientApplication confidentialClientApplication, IGraphServiceClient graphServiceClient, ExtensionService extensionService, AuthorizationService authorizationService, IApiService apiService)
         {
             this.confidentialClientApplication = confidentialClientApplication;
             this.graphServiceClient = graphServiceClient;
             this.extensionService = extensionService;
             this.authorizationService = authorizationService;
-            this.clientFactory = clientFactory;
+            this.apiService = apiService;
             userProperties = $"{nameof(User.Id)}, {nameof(User.DisplayName)}, {nameof(User.GivenName)}, {nameof(User.Surname)}, {nameof(User.Identities)}, {extensionService.GetExtensionByName(CustomerClaim)}";
         }
 
@@ -50,11 +50,8 @@ namespace AADB2C.Functions
         {
             var code = req.Query["code"];
             var token = await confidentialClientApplication.AcquireTokenByAuthorizationCode(authorizationService.AuthorizationScopes, code).ExecuteAsync();
-            using var httpClient = clientFactory.CreateClient("web");
-            httpClient.DefaultRequestHeaders.Authorization = AuthenticationHeaderValue.Parse(token.CreateAuthorizationHeader());
-            var response = await httpClient.GetAsync("/");
-            response.EnsureSuccessStatusCode();
-            return new OkObjectResult(await response.Content.ReadAsStringAsync());
+            var result = await apiService.CallSecureApiAsync(token.AccessToken);
+            return new OkObjectResult(result);
         }
 
         [FunctionName(nameof(Users))]

@@ -17,7 +17,7 @@ namespace AADB2C.Functions
             builder.Services.AddSingleton<ExtensionService>();
             builder.Services.AddSingleton<AuthorizationService>();
 
-            builder.Services.AddHttpClient("web", client => client.BaseAddress = new Uri("https://localhost:5001"));
+            builder.Services.AddHttpClient<IApiService, ApiService>(client => client.BaseAddress = new Uri("https://localhost:5001"));
 
             builder.Services.AddSingleton(provider =>
             {
