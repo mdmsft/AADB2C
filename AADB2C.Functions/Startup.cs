@@ -1,4 +1,7 @@
-﻿using Microsoft.Azure.Functions.Extensions.DependencyInjection;
+﻿using Azure;
+using Azure.Core;
+using Azure.Identity;
+using Microsoft.Azure.Functions.Extensions.DependencyInjection;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Graph;
@@ -17,7 +20,7 @@ namespace AADB2C.Functions
             builder.Services.AddSingleton<ExtensionService>();
             builder.Services.AddSingleton<AuthorizationService>();
 
-            builder.Services.AddHttpClient<IApiService, ApiService>(client => client.BaseAddress = new Uri("https://localhost:5001"));
+            builder.Services.AddHttpClient<IApiService, ApiService>((provider, client) => client.BaseAddress = provider.GetRequiredService<IConfiguration>().GetValue<Uri>("API_SERVICE_URI"));
 
             builder.Services.AddSingleton(provider =>
             {
@@ -53,6 +56,19 @@ namespace AADB2C.Functions
                 });
                 return new GraphServiceClient(delegateAuthenticationProvider);
             });
+        }
+
+        public override void ConfigureAppConfiguration(IFunctionsConfigurationBuilder builder)
+        {
+            var configuration = builder.ConfigurationBuilder.AddEnvironmentVariables().Build();
+            var azureAppConfigurationConnectionString = configuration.GetValue<string>("AzureAppConfigurationConnectionString");
+            if (azureAppConfigurationConnectionString != default)
+            {
+                TokenCredential tokenCredential = new ChainedTokenCredential(new ManagedIdentityCredential(), new EnvironmentCredential(), new VisualStudioCredential(), new VisualStudioCredential());
+                builder.ConfigurationBuilder.AddAzureAppConfiguration(configuration =>
+                    configuration.Connect(azureAppConfigurationConnectionString).ConfigureKeyVault(options =>
+                        options.SetCredential(tokenCredential)));
+            }
         }
     }
 }

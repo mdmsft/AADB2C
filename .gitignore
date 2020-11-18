@@ -354,4 +354,5 @@ MigrationBackup/
 
 .vscode/
 *.local.json
-local.settings.json
+AADB2C.Functions/local.settings.json
+AADB2C.Web/appsettings.Development.json
