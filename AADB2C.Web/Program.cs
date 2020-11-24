@@ -1,3 +1,4 @@
+using Azure.Core;
 using Azure.Identity;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Builder;
@@ -9,20 +10,23 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Identity.Web;
 
 await Host.CreateDefaultBuilder(args)
-    .ConfigureAppConfiguration(builder =>
+    .ConfigureAppConfiguration((hostBuilder, configurationBuilder) =>
     {
-        var configuration = builder.Build();
-        builder.AddAzureAppConfiguration(config =>
+        var configuration = configurationBuilder.Build();
+        configurationBuilder.AddAzureAppConfiguration(config =>
             config.Connect(configuration.GetConnectionString("AzureAppConfiguration")).ConfigureKeyVault(options =>
-                options.SetCredential(new DefaultAzureCredential(true))));
+                {
+                    TokenCredential credential = hostBuilder.HostingEnvironment.IsDevelopment() ? new SharedTokenCacheCredential() : new ManagedIdentityCredential();
+                    options.SetCredential(credential);
+                }));
     })
     .ConfigureWebHostDefaults(host =>
     {
         host.ConfigureServices((context, services) =>
         {
             services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme).AddMicrosoftIdentityWebApi(context.Configuration);
-
             services.AddAuthorization();
+            services.AddHealthChecks();
         })
         .Configure((context, app) =>
         {
@@ -32,12 +36,13 @@ await Host.CreateDefaultBuilder(args)
             }
 
             app.UseHttpsRedirection();
-
             app.UseRouting();
-
             app.UseAuthentication();
             app.UseAuthorization();
-
-            app.UseEndpoints(endpoints => endpoints.MapGet("/", ctx => ctx.Response.WriteAsync($"Hello, {ctx.User.Identity.Name}!")).RequireAuthorization());
+            app.UseEndpoints(endpoints =>
+            {
+                endpoints.MapGet("/", ctx => ctx.Response.WriteAsync($"Hello, {ctx.User.Identity.Name}!")).RequireAuthorization();
+                endpoints.MapHealthChecks("/health");
+            });
         });
     }).Build().RunAsync();

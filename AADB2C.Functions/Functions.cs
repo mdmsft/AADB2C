@@ -32,18 +32,18 @@ namespace AADB2C.Functions
             userProperties = $"{nameof(User.Id)}, {nameof(User.DisplayName)}, {nameof(User.GivenName)}, {nameof(User.Surname)}, {nameof(User.Identities)}, {extensionService.GetExtensionByName(CustomerClaim)}";
         }
 
-        [FunctionName(nameof(B2C))]
-        public async Task<IActionResult> B2C(
-            [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = null)] HttpRequest req,
+        [FunctionName(nameof(Root))]
+        public async Task<IActionResult> Root(
+            [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "/")] HttpRequest req,
             ILogger log)
         {
             var uri = await confidentialClientApplication.GetAuthorizationRequestUrl(authorizationService.AuthorizationScopes).ExecuteAsync();
             return new RedirectResult(uri.AbsoluteUri);
         }
 
-        [FunctionName(nameof(Auth))]
-        public async Task<IActionResult> Auth(
-            [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "b2c/auth")] HttpRequest req,
+        [FunctionName(nameof(B2C))]
+        public async Task<IActionResult> B2C(
+            [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = null)] HttpRequest req,
             ILogger log)
         {
             var code = req.Query["code"];

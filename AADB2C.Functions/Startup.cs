@@ -1,9 +1,9 @@
-﻿using Azure;
-using Azure.Core;
+﻿using Azure.Core;
 using Azure.Identity;
 using Microsoft.Azure.Functions.Extensions.DependencyInjection;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
 using Microsoft.Graph;
 using Microsoft.Identity.Client;
 using System;
@@ -64,7 +64,7 @@ namespace AADB2C.Functions
             var azureAppConfigurationConnectionString = configuration.GetValue<string>("AzureAppConfigurationConnectionString");
             if (azureAppConfigurationConnectionString != default)
             {
-                TokenCredential tokenCredential = new ChainedTokenCredential(new ManagedIdentityCredential(), new EnvironmentCredential(), new VisualStudioCredential(), new VisualStudioCredential());
+                TokenCredential tokenCredential = builder.GetContext().EnvironmentName == EnvironmentName.Development ? new SharedTokenCacheCredential() : new ManagedIdentityCredential();
                 builder.ConfigurationBuilder.AddAzureAppConfiguration(configuration =>
                     configuration.Connect(azureAppConfigurationConnectionString).ConfigureKeyVault(options =>
                         options.SetCredential(tokenCredential)));
