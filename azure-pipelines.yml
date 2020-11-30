@@ -4,112 +4,112 @@
 # https://docs.microsoft.com/en-us/azure/devops/pipelines/languages/dotnet-core
 
 trigger:
-  - main
+- azure-app-configuration
   
-  variables:
-    # Azure Resource Manager connection created during pipeline creation
-    azureSubscription: 'AADB2C'
+variables:
+  # Azure Resource Manager connection created during pipeline creation
+  azureSubscription: 'AADB2C'
+
+  # Function app name
+  functionAppName: 'aadb2cweb'
   
-    # Function app name
-    functionAppName: 'aadb2cweb'
-    
-    # Web app name
-    webAppName: 'aadb2csrv'
+  # Web app name
+  webAppName: 'aadb2csrv'
+
+  # Agent VM image name
+  vmImageName: 'windows-latest'
+
+  # Working directory
+  workingDirectory: '$(System.DefaultWorkingDirectory)'
+
+  # Functions Working Directory
+  functionsWorkingDirectory: '$(System.DefaultWorkingDirectory)/AADB2C.Functions'
+
+  # Web Working Directory
+  webWorkingDirectory: '$(System.DefaultWorkingDirectory)/AADB2C.Web'
   
-    # Agent VM image name
-    vmImageName: 'windows-latest'
-  
-    # Working directory
-    workingDirectory: '$(System.DefaultWorkingDirectory)'
-  
-    # Functions Working Directory
-    functionsWorkingDirectory: '$(System.DefaultWorkingDirectory)/AADB2C.Functions'
-  
-    # Web Working Directory
-    webWorkingDirectory: '$(System.DefaultWorkingDirectory)/AADB2C.Web'
-  
-  stages:
-  - stage: Build
-    displayName: Build stage
-  
-    jobs:
-    - job: BuildWebApp
-      displayName: Build web app
-      pool:
-        vmImage: $(vmImageName)
-  
-      steps:
-      - task: DotNetCoreCLI@2
-        displayName: Build project
-        inputs:
-          command: 'build'
-          projects: |
-            $(webWorkingDirectory)/*.csproj
-          arguments: --output $(System.DefaultWorkingDirectory)/web --configuration Release
-      - task: ArchiveFiles@2
-        displayName: 'Archive files'
-        inputs:
-          rootFolderOrFile: '$(System.DefaultWorkingDirectory)/web'
-          includeRootFolder: false
-          archiveType: zip
-          archiveFile: $(Build.ArtifactStagingDirectory)/$(Build.BuildId).zip
-          replaceExistingArchive: true
-      - publish: $(Build.ArtifactStagingDirectory)/$(Build.BuildId).zip
-        artifact: web
-  
-    - job: BuildFunctionsApp
+stages:
+- stage: Build
+  displayName: Build stage
+
+  jobs:
+  - job: BuildWebApp
+    displayName: Build web app
+    pool:
+      vmImage: $(vmImageName)
+
+    steps:
+    - task: DotNetCoreCLI@2
+      displayName: Build project
+      inputs:
+        command: 'build'
+        projects: |
+          $(webWorkingDirectory)/*.csproj
+        arguments: --output $(System.DefaultWorkingDirectory)/web --configuration Release
+    - task: ArchiveFiles@2
+      displayName: 'Archive files'
+      inputs:
+        rootFolderOrFile: '$(System.DefaultWorkingDirectory)/web'
+        includeRootFolder: false
+        archiveType: zip
+        archiveFile: $(Build.ArtifactStagingDirectory)/$(Build.BuildId).zip
+        replaceExistingArchive: true
+    - publish: $(Build.ArtifactStagingDirectory)/$(Build.BuildId).zip
+      artifact: web
+
+  - job: BuildFunctionsApp
+    displayName: Build functions app
+    pool:
+      vmImage: $(vmImageName)
+
+    steps:
+    - task: DotNetCoreCLI@2
       displayName: Build functions app
-      pool:
-        vmImage: $(vmImageName)
-  
-      steps:
-      - task: DotNetCoreCLI@2
-        displayName: Build functions app
-        inputs:
-          command: 'build'
-          projects: |
-            $(functionsWorkingDirectory)/*.csproj
-          arguments: --output $(System.DefaultWorkingDirectory)/functions --configuration Release
-      - task: ArchiveFiles@2
-        displayName: 'Archive functions app files'
-        inputs:
-          rootFolderOrFile: '$(System.DefaultWorkingDirectory)/functions'
-          includeRootFolder: false
-          archiveType: zip
-          archiveFile: $(Build.ArtifactStagingDirectory)/$(Build.BuildId).zip
-          replaceExistingArchive: true
-      - publish: $(Build.ArtifactStagingDirectory)/$(Build.BuildId).zip
-        artifact: functions
-      
-  
-  - stage: Deploy
-    displayName: Deploy stage
-    dependsOn: Build
-    condition: succeeded()
-  
-    jobs:
-    - deployment: Deploy
-      displayName: Deploy
-      environment: 'development'
-      pool:
-        vmImage: $(vmImageName)
-  
-      strategy:
-        runOnce:
-          deploy:
-  
-            steps:
-            - task: AzureFunctionApp@1
-              displayName: 'Azure functions app deploy'
-              inputs:
-                azureSubscription: '$(azureSubscription)'
-                appType: functionApp
-                appName: $(functionAppName)
-                package: '$(Pipeline.Workspace)/functions/$(Build.BuildId).zip'
-            - task: AzureWebApp@1
-              inputs:
-                azureSubscription: '$(azureSubscription)'
-                appType: 'webApp'
-                appName: $(webAppName)
-                package: '$(Pipeline.Workspace)/web/$(Build.BuildId).zip'
-                deploymentMethod: 'zipDeploy'
+      inputs:
+        command: 'build'
+        projects: |
+          $(functionsWorkingDirectory)/*.csproj
+        arguments: --output $(System.DefaultWorkingDirectory)/functions --configuration Release
+    - task: ArchiveFiles@2
+      displayName: 'Archive functions app files'
+      inputs:
+        rootFolderOrFile: '$(System.DefaultWorkingDirectory)/functions'
+        includeRootFolder: false
+        archiveType: zip
+        archiveFile: $(Build.ArtifactStagingDirectory)/$(Build.BuildId).zip
+        replaceExistingArchive: true
+    - publish: $(Build.ArtifactStagingDirectory)/$(Build.BuildId).zip
+      artifact: functions
+    
+
+- stage: Deploy
+  displayName: Deploy stage
+  dependsOn: Build
+  condition: succeeded()
+
+  jobs:
+  - deployment: Deploy
+    displayName: Deploy
+    environment: 'development'
+    pool:
+      vmImage: $(vmImageName)
+
+    strategy:
+      runOnce:
+        deploy:
+
+          steps:
+          - task: AzureFunctionApp@1
+            displayName: 'Azure functions app deploy'
+            inputs:
+              azureSubscription: '$(azureSubscription)'
+              appType: functionApp
+              appName: $(functionAppName)
+              package: '$(Pipeline.Workspace)/functions/$(Build.BuildId).zip'
+          - task: AzureWebApp@1
+            inputs:
+              azureSubscription: '$(azureSubscription)'
+              appType: 'webApp'
+              appName: $(webAppName)
+              package: '$(Pipeline.Workspace)/web/$(Build.BuildId).zip'
+              deploymentMethod: 'zipDeploy'
